@@ -56,7 +56,7 @@ cat ~/.claude/plugins/marketplaces/kf-claude/kf-claude/templates/youtube-note-te
 - [ ] `type: video`
 - [ ] `status: inbox`
 - [ ] `read: false` ← **REQUIRED for tracking read status**
-- [ ] `cover:` with `https://i.ytimg.com/vi/{VIDEO_ID}/maxresdefault.jpg`
+- [ ] `cover:` with best available thumbnail (see Thumbnail Resolution below)
 - [ ] `url:` with full YouTube URL
 - [ ] `channel:` with channel name
 - [ ] `video_date:` with video publication date
@@ -83,6 +83,27 @@ cat ~/.claude/plugins/marketplaces/kf-claude/kf-claude/templates/youtube-note-te
 - ✅ Read the raw template content
 - ✅ Replace `{{PLACEHOLDER}}` with actual values
 - ✅ Keep ALL sections, even if some data is unavailable (mark as "N/A")
+
+## Thumbnail Resolution
+
+**Not all YouTube videos have `maxresdefault.jpg`.** You MUST check availability and use the best working resolution.
+
+Run this to find the best thumbnail:
+```bash
+VIDEO_ID="<video_id>"
+for res in maxresdefault sddefault hqdefault mqdefault; do
+  STATUS=$(curl -sI "https://i.ytimg.com/vi/$VIDEO_ID/$res.jpg" | head -1 | awk '{print $2}')
+  if [ "$STATUS" = "200" ]; then echo "$res.jpg"; break; fi
+done
+```
+
+**Resolution priority** (use first that returns 200):
+1. `maxresdefault.jpg` (1280x720)
+2. `sddefault.jpg` (640x480)
+3. `hqdefault.jpg` (480x360)
+4. `mqdefault.jpg` (320x180)
+
+Replace `{{THUMBNAIL}}` in the template with the chosen filename.
 
 ## Tag Taxonomy Reference
 

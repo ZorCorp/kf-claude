@@ -2,7 +2,7 @@
 title: "{{TITLE}}"
 tags: [video, {{TOPIC_TAGS}}, inbox, {{METADATA_TAGS}}]
 url: https://www.youtube.com/watch?v={{VIDEO_ID}}
-cover: https://i.ytimg.com/vi/{{VIDEO_ID}}/maxresdefault.jpg
+cover: https://i.ytimg.com/vi/{{VIDEO_ID}}/{{THUMBNAIL}}
 date: {{DATE}}
 type: video
 status: inbox
@@ -13,7 +13,7 @@ channel: {{CHANNEL}}
 
 # {{TITLE}}
 
-[![Watch on YouTube](https://i.ytimg.com/vi/{{VIDEO_ID}}/maxresdefault.jpg)](https://www.youtube.com/watch?v={{VIDEO_ID}})
+[![Watch on YouTube](https://i.ytimg.com/vi/{{VIDEO_ID}}/{{THUMBNAIL}})](https://www.youtube.com/watch?v={{VIDEO_ID}})
 
 ## 📖 Description
 

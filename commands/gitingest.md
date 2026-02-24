@@ -1,29 +1,39 @@
-**Purpose**: Git repository analysis and markdown digest generation for LLM ingestion using GitHub MCP tools
-
+---
+description: Analyze GitHub repository and create markdown digest with AI-powered smart tagging
+argument-hint: [github-url] (Full GitHub repository URL, e.g. https://github.com/owner/repo)
+allowed-tools:
+  - Bash(*)
+  - mcp__MCP_DOCKER__get_file_contents
+  - mcp__MCP_DOCKER__list_commits
+  - mcp__MCP_DOCKER__list_branches
+  - mcp__MCP_DOCKER__search_repositories
+  - mcp__MCP_DOCKER__search_code
+  - mcp__MCP_DOCKER__obsidian_*
 ---
 
-@include shared/universal-constants.yml#Universal_Legend
+## Task
 
-## Command Execution
-Execute: immediate. --plan→show plan first
-Legend: Generated based on symbols used in command
-Purpose: "[Action][Subject] - Analyze GitHub repository and create markdown digest"
+Analyze a GitHub repository and create a markdown digest saved to the Obsidian vault.
+
+**Input**: `$ARGUMENTS` (Full GitHub repository URL)
+**Operation**: Repository analysis and digest creation
+**Today's Date**: Run `date "+%Y-%m-%d"` to get current date
+
+**⚠️ You MUST call `mcp__MCP_DOCKER__obsidian_append_content` to save the file!**
 
 Analyze GitHub repositories using native MCP Docker GitHub tools and create LLM-optimized markdown digests automatically saved to your Obsidian vault.
-
-@include shared/flag-inheritance.yml#Universal_Always
 
 ## Usage
 
 ```
-/gitingest <github-url> [options]
+/kf-claude:gitingest <github-url> [options]
 ```
 
 **Examples:**
-- `/gitingest https://github.com/user/repo` - Analyze public GitHub repo
-- `/gitingest https://github.com/user/private-repo` - Analyze private repo (uses your authenticated credentials)
-- `/gitingest https://github.com/user/repo --branch feature-branch` - Analyze specific branch
-- `/gitingest https://github.com/user/repo --focus code` - Focus on code files only
+- `/kf-claude:gitingest https://github.com/user/repo` - Analyze public GitHub repo
+- `/kf-claude:gitingest https://github.com/user/private-repo` - Analyze private repo (uses your authenticated credentials)
+- `/kf-claude:gitingest https://github.com/user/repo --branch feature-branch` - Analyze specific branch
+- `/kf-claude:gitingest https://github.com/user/repo --focus code` - Focus on code files only
 
 ## Parameters
 
@@ -141,6 +151,12 @@ visibility: <public|private>
 <Why these tags were chosen>
 ```
 
+## Tag Taxonomy Reference
+
+**Topics:** AI, productivity, knowledge-management, development, learning, research, writing, tools, business, design, automation, data-science, web-development, personal-growth, finance
+**Status:** inbox (default for new repositories)
+**Metadata:** technical, deep-dive, reference
+
 ## Use Cases
 
 - **Code Review Preparation**: Get full context before reviewing PRs
@@ -161,9 +177,3 @@ visibility: <public|private>
 - **404 Not Found**: Repository doesn't exist or is private (and you lack access)
 - **403 Forbidden**: Rate limit exceeded or insufficient permissions
 - **Invalid URL**: Provide full GitHub URL format
-
-@include shared/research-patterns.yml#Mandatory_Research_Flows
-
-@include shared/docs-patterns.yml#Standard_Notifications
-
-@include shared/universal-constants.yml#Standard_Messages_Templates

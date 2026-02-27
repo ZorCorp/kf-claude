@@ -119,21 +119,30 @@ NOTE_CONTENT=$(cat "$NOTE_FILE")
 # Convert image paths for GitHub Pages using Python for reliable regex
 # Custom domain: ./images/file.jpg → /images/file.jpg
 # GitHub Pages: ./images/file.jpg → /repo/images/file.jpg
-CONVERTED_CONTENT=$(echo "$NOTE_CONTENT" | python3 -c "
+CONVERT_SCRIPT=$(mktemp)
+cat > "$CONVERT_SCRIPT" << 'PYEOF'
 import sys, re
 
 content = sys.stdin.read()
-image_prefix = '$IMAGE_PREFIX'
+image_prefix = sys.argv[1] if len(sys.argv) > 1 else ''
+exts = r'\.(jpg|jpeg|png|gif|svg|webp)'
 
-# Pattern 1: ./path/to/image.ext -> /prefix/path/to/image.ext (or /path if no prefix)
-content = re.sub(r'!\[([^\]]*)\]\(\./([^)]+\.(jpg|jpeg|png|gif|svg|webp))\)', rf'![\1]({image_prefix}/\2)', content, flags=re.IGNORECASE)
+def convert_img(m):
+    alt = m.group(1)
+    path = m.group(2)
+    # Skip URLs and already-absolute paths
+    if path.startswith('http://') or path.startswith('https://') or path.startswith('/'):
+        return m.group(0)
+    # Strip leading ./
+    if path.startswith('./'):
+        path = path[2:]
+    return f'![{alt}]({image_prefix}/{path})'
 
-# Pattern 2: path/to/image.ext (no leading ./) -> /prefix/path/to/image.ext
-# But skip URLs (http:// or https://)
-content = re.sub(r'!\[([^\]]*)\]\((?!https?://|/)([^)]+\.(jpg|jpeg|png|gif|svg|webp))\)', rf'![\1]({image_prefix}/\2)', content, flags=re.IGNORECASE)
-
+content = re.sub(r'!\[([^\]]*)\]\(([^)]+' + exts + r')\)', convert_img, content, flags=re.IGNORECASE)
 print(content, end='')
-")
+PYEOF
+CONVERTED_CONTENT=$(echo "$NOTE_CONTENT" | python3 "$CONVERT_SCRIPT" "$IMAGE_PREFIX")
+rm -f "$CONVERT_SCRIPT"
 
 echo "📝 Image path conversion complete"
 echo ""

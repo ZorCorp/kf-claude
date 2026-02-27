@@ -1,0 +1,233 @@
+name: Monitor plannotator sharing.ts
+
+on:
+  schedule:
+    - cron: '0 9 * * 1'  # Every Monday at 9am UTC
+  workflow_dispatch:     # Allow manual trigger
+
+permissions:
+  issues: write
+  contents: write
+  pull-requests: write
+
+jobs:
+  check-sharing-ts:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout kf-claude
+        uses: actions/checkout@v4
+
+      - name: Fetch latest sharing.ts from plannotator
+        run: |
+          curl -fsSL \
+            "https://raw.githubusercontent.com/backnotprop/plannotator/main/packages/ui/utils/sharing.ts" \
+            -o /tmp/sharing.ts.latest
+          echo "Fetched $(wc -l < /tmp/sharing.ts.latest) lines from plannotator"
+
+      - name: Diff against stored reference
+        id: diff
+        run: |
+          REFERENCE=".github/plannotator-compat/sharing.ts"
+
+          if diff -q "$REFERENCE" /tmp/sharing.ts.latest > /dev/null 2>&1; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No changes detected in sharing.ts"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            DIFF_OUTPUT=$(diff "$REFERENCE" /tmp/sharing.ts.latest || true)
+            echo "DIFF<<EOF" >> "$GITHUB_OUTPUT"
+            echo "$DIFF_OUTPUT" >> "$GITHUB_OUTPUT"
+            echo "EOF" >> "$GITHUB_OUTPUT"
+            echo "Changes detected:"
+            echo "$DIFF_OUTPUT"
+          fi
+
+      - name: Analyze changes
+        id: analysis
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          DIFF="${{ steps.diff.outputs.DIFF }}"
+          BREAKING_FLAGS=""
+          AUTO_PATCH="none"
+
+          # --- Compression algorithm ---
+          if echo "$DIFF" | grep -qE '^\+.*(CompressionStream|DecompressionStream|deflate)'; then
+            NEW_COMPRESSION=$(grep -oE "CompressionStream\('[^']+'\)" /tmp/sharing.ts.latest | head -1 || echo "unknown")
+            BREAKING_FLAGS="${BREAKING_FLAGS}\n- ⚠️ **Compression change** — \`$NEW_COMPRESSION\`"
+            AUTO_PATCH="compression"
+          fi
+
+          # --- Encoding scheme ---
+          if echo "$DIFF" | grep -qE '^\+.*(replace.*\+.*-|replace.*_|btoa|atob|base64)'; then
+            BREAKING_FLAGS="${BREAKING_FLAGS}\n- ⚠️ **Encoding change** — base64/base64url logic modified"
+            AUTO_PATCH="encoding"
+          fi
+
+          # --- Payload structure (p/a/g keys) ---
+          if echo "$DIFF" | grep -qE '^\+.*SharePayload|^\+.*p:.*string|^\+.*a:.*\[\]|^\+.*g\?:'; then
+            BREAKING_FLAGS="${BREAKING_FLAGS}\n- ⚠️ **Payload structure change** — \`SharePayload\` interface modified"
+            AUTO_PATCH="payload"
+          fi
+
+          # --- generateShareUrl signature ---
+          if echo "$DIFF" | grep -qE '^\+.*generateShareUrl'; then
+            BREAKING_FLAGS="${BREAKING_FLAGS}\n- ⚠️ **API change** — \`generateShareUrl\` signature modified"
+          fi
+
+          if [ -z "$BREAKING_FLAGS" ]; then
+            SAFETY="✅ **Safe change** — No breaking patterns detected. Verify manually to confirm."
+          else
+            SAFETY="$(printf '%b' "$BREAKING_FLAGS")"
+          fi
+
+          echo "SAFETY<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$SAFETY" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          echo "AUTO_PATCH=$AUTO_PATCH" >> "$GITHUB_OUTPUT"
+
+      - name: Auto-patch share.md for compression change
+        id: autopatch
+        if: steps.diff.outputs.changed == 'true' && steps.analysis.outputs.AUTO_PATCH == 'compression'
+        run: |
+          # Extract the new compression algorithm from sharing.ts
+          NEW_ALGO=$(grep -oE "CompressionStream\('[^']+'\)" /tmp/sharing.ts.latest | head -1 | grep -oE "'[^']+'" | tr -d "'")
+          echo "New compression algorithm: $NEW_ALGO"
+
+          if [ "$NEW_ALGO" = "deflate-raw" ]; then
+            echo "Algorithm is deflate-raw — share.md already uses this format. No patch needed."
+            echo "patched=false" >> "$GITHUB_OUTPUT"
+          elif [ "$NEW_ALGO" = "deflate" ]; then
+            # Switch to zlib format (deflate with header)
+            python3 << 'PATCH_SCRIPT'
+          import re
+
+          with open('commands/share.md', 'r') as f:
+              content = f.read()
+
+          old_compress = (
+              "    compressor = zlib.compressobj(level=6, wbits=-15)\n"
+              "    compressed = compressor.compress(json_str.encode('utf-8')) + compressor.flush()\n"
+              "    encoded = base64.urlsafe_b64encode(compressed).decode('utf-8').rstrip('=')"
+          )
+          new_compress = (
+              "    compressed = zlib.compress(json_str.encode('utf-8'))\n"
+              "    encoded = base64.urlsafe_b64encode(compressed).decode('utf-8').rstrip('=')"
+          )
+
+          if old_compress in content:
+              content = content.replace(old_compress, new_compress)
+              with open('commands/share.md', 'w') as f:
+                  f.write(content)
+              print("Patched share.md: switched to zlib (deflate) compression")
+          else:
+              print("WARNING: Could not find expected compression block to patch")
+          PATCH_SCRIPT
+            echo "patched=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Unknown algorithm '$NEW_ALGO' — manual update required."
+            echo "patched=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create pull request with auto-patch
+        if: steps.autopatch.outputs.patched == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TODAY=$(date -u +%Y-%m-%d)
+          BRANCH="auto/plannotator-compat-$TODAY"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Update reference copy
+          cp /tmp/sharing.ts.latest .github/plannotator-compat/sharing.ts
+
+          git checkout -b "$BRANCH"
+          git add commands/share.md .github/plannotator-compat/sharing.ts
+          git commit -m "fix: update share.md for plannotator compression change ($TODAY)
+
+          Auto-patched by monitor-plannotator workflow.
+          Source: backnotprop/plannotator packages/ui/utils/sharing.ts"
+
+          git push origin "$BRANCH"
+
+          gh pr create \
+            --title "[Auto] plannotator compat update ($TODAY)" \
+            --body "## Auto-patch: plannotator compression format changed
+
+          This PR was automatically generated by the \`monitor-plannotator\` workflow.
+
+          **Changes:**
+          - Updated \`commands/share.md\` compression to match new plannotator format
+          - Updated \`.github/plannotator-compat/sharing.ts\` reference copy
+
+          **Breaking change analysis:**
+          ${{ steps.analysis.outputs.SAFETY }}
+
+          **Full diff of sharing.ts:**
+          \`\`\`diff
+          ${{ steps.diff.outputs.DIFF }}
+          \`\`\`
+
+          Please review before merging." \
+            --base master \
+            --head "$BRANCH"
+
+      - name: Create informational issue (non-auto-patchable changes)
+        if: steps.diff.outputs.changed == 'true' && steps.autopatch.outputs.patched != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TODAY=$(date -u +%Y-%m-%d)
+          DIFF="${{ steps.diff.outputs.DIFF }}"
+          SAFETY="${{ steps.analysis.outputs.SAFETY }}"
+
+          gh issue create \
+            --title "[Compat] plannotator sharing.ts updated ($TODAY)" \
+            --body "## plannotator \`sharing.ts\` has changed
+
+          **Date detected:** $TODAY
+          **Source:** [plannotator/main: packages/ui/utils/sharing.ts](https://github.com/backnotprop/plannotator/blob/main/packages/ui/utils/sharing.ts)
+
+          ---
+
+          ## Breaking Change Analysis
+
+          $SAFETY
+
+          ---
+
+          ## What to check in \`commands/share.md\`
+
+          - **Compression block** (\`zlib.compressobj wbits=-15\`): must match plannotator's \`CompressionStream\` algorithm
+          - **Payload structure** (\`{\"p\": content, \"a\": []}\`): must match \`SharePayload\` interface (\`p\`, \`a\`, \`g\` keys)
+          - **Encoding** (\`base64.urlsafe_b64encode + rstrip('=')\`): must match plannotator's base64url scheme
+
+          ---
+
+          ## Full Diff
+
+          \`\`\`diff
+          $DIFF
+          \`\`\`
+
+          ---
+
+          ## Next Steps
+
+          1. Review the diff above
+          2. Update \`commands/share.md\` manually if format changed
+          3. Update \`.github/plannotator-compat/sharing.ts\` reference once compatible
+          4. Close this issue" \
+            --label "compatibility,automated"
+
+      - name: Update reference copy (no breaking changes)
+        if: steps.diff.outputs.changed == 'true' && steps.analysis.outputs.AUTO_PATCH == 'none' && steps.autopatch.outputs.patched != 'true'
+        run: |
+          cp /tmp/sharing.ts.latest .github/plannotator-compat/sharing.ts
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .github/plannotator-compat/sharing.ts
+          git commit -m "chore: update plannotator sharing.ts reference ($(date -u +%Y-%m-%d))"
+          git push

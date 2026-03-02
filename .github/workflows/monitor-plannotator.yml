@@ -90,65 +90,6 @@ jobs:
         id: autopatch
         if: steps.diff.outputs.changed == 'true' && steps.analysis.outputs.AUTO_PATCH == 'compression'
         run: |
-          # Extract the new compression algorithm from sharing.ts
-          NEW_ALGO=$(grep -oE "CompressionStream\('[^']+'\)" /tmp/sharing.ts.latest | head -1 | grep -oE "'[^']+'" | tr -d "'")
-          echo "New compression algorithm: $NEW_ALGO"
-
-          if [ "$NEW_ALGO" = "deflate-raw" ]; then
-            echo "Algorithm is deflate-raw — share.md already uses this format. No patch needed."
-            echo "patched=false" >> "$GITHUB_OUTPUT"
-          elif [ "$NEW_ALGO" = "deflate" ]; then
-            # Switch to zlib format (deflate with header)
-            python3 << 'PATCH_SCRIPT'
-          import re
-
-          with open('commands/share.md', 'r') as f:
-              content = f.read()
-
-          old_compress = (
-              "    compressor = zlib.compressobj(level=6, wbits=-15)\n"
-              "    compressed = compressor.compress(json_str.encode('utf-8')) + compressor.flush()\n"
-              "    encoded = base64.urlsafe_b64encode(compressed).decode('utf-8').rstrip('=')"
-          )
-          new_compress = (
-              "    compressed = zlib.compress(json_str.encode('utf-8'))\n"
-              "    encoded = base64.urlsafe_b64encode(compressed).decode('utf-8').rstrip('=')"
-          )
-
-          if old_compress in content:
-              content = content.replace(old_compress, new_compress)
-              with open('commands/share.md', 'w') as f:
-                  f.write(content)
-              print("Patched share.md: switched to zlib (deflate) compression")
-          else:
-              print("WARNING: Could not find expected compression block to patch")
-          PATCH_SCRIPT
-            echo "patched=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "Unknown algorithm '$NEW_ALGO' — manual update required."
-            echo "patched=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Create pull request with auto-patch
-        if: steps.autopatch.outputs.patched == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          TODAY=$(date -u +%Y-%m-%d)
-          BRANCH="auto/plannotator-compat-$TODAY"
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # Update reference copy
-          cp /tmp/sharing.ts.latest .github/plannotator-compat/sharing.ts
-
-          git checkout -b "$BRANCH"
-          git add commands/share.md .github/plannotator-compat/sharing.ts
-          git commit -m "fix: update share.md for plannotator compression change ($TODAY)
-
-          Auto-patched by monitor-plannotator workflow.
-          Source: backnotprop/plannotator packages/ui/utils/sharing.ts"
 
           git push origin "$BRANCH"
 
@@ -231,3 +172,10 @@ jobs:
           git add .github/plannotator-compat/sharing.ts
           git commit -m "chore: update plannotator sharing.ts reference ($(date -u +%Y-%m-%d))"
           git push
+
+      - name: Skip auto-patch (Python implementation)
+        id: autopatch
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          echo "patched=false" >> "$GITHUB_OUTPUT"
+          echo "INFO: kf-claude uses Python, auto-patch disabled"

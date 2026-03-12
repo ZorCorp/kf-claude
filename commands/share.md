@@ -12,7 +12,7 @@ allowed-tools:
 
 ## Task
 
-Generate a shareable URL for a note using Base64 + deflate-raw compression (plannotator-compatible format).
+Generate a shareable URL for a note using Base64 + zlib compression.
 
 **Input**: `$ARGUMENTS` (filename with or without .md extension)
 
@@ -61,12 +61,35 @@ Task tool call:
     with open('/tmp/share_note.md', 'r') as f:
         content = f.read()
 
-    # Compress and encode using deflate-raw (plannotator-compatible)
+    # CRC32 matching JavaScript's charCodeAt & 0xFF implementation (UTF-16 code units)
+    def crc32_str(s):
+        table = []
+        for i in range(256):
+            c = i
+            for _ in range(8):
+                c = (0xEDB88320 ^ (c >> 1)) if (c & 1) else (c >> 1)
+            table.append(c & 0xFFFFFFFF)
+        crc = 0xFFFFFFFF
+        for ch in s:
+            cp = ord(ch)
+            if cp < 0x10000:
+                code_units = [cp]
+            else:
+                cp -= 0x10000
+                code_units = [0xD800 + (cp >> 10), 0xDC00 + (cp & 0x3FF)]
+            for unit in code_units:
+                crc = table[(crc ^ (unit & 0xFF)) & 0xFF] ^ (crc >> 8)
+        return (crc ^ 0xFFFFFFFF) & 0xFFFFFFFF
+
+    # Create structure with checksum
     data = {"p": content, "a": []}
+    payload = json.dumps({"p": content, "a": []}, ensure_ascii=False, separators=(',', ':'))
+    data["_crc"] = crc32_str(payload)
+
+    # Compress and encode
     json_str = json.dumps(data, ensure_ascii=False)
-    compressor = zlib.compressobj(level=6, wbits=-15)
-    compressed = compressor.compress(json_str.encode('utf-8')) + compressor.flush()
-    encoded = base64.urlsafe_b64encode(compressed).decode('utf-8').rstrip('=')
+    compressed = zlib.compress(json_str.encode('utf-8'))
+    encoded = base64.urlsafe_b64encode(compressed).decode('utf-8')
 
     # Generate URL
     url = f"{SHARE_BASE_URL}#{encoded}"
@@ -100,9 +123,10 @@ Task tool call:
 ## Features
 
 - **No server storage**: Content lives entirely in the URL
-- **Compression**: deflate-raw (identical to plannotator's CompressionStream format)
+- **Compression**: zlib reduces URL length
+- **Integrity check**: CRC32 checksum detects URL corruption from truncation
 - **Annotations**: Recipients can add comments and re-share
-- **Compatible**: Identical format to Plannotator — URLs are interchangeable
+- **Compatible**: Same format as Plannotator
 
 ## Examples
 

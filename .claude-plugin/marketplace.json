@@ -1,8 +1,8 @@
 {
   "name": "kf-claude",
   "owner": {
-    "name": "crewnest.ai",
-    "email": "info@crewnest.ai"
+    "name": "ZorCorp",
+    "email": "info@zorcorp.dev"
   },
   "metadata": {
     "description": "KnowledgeFactory for Claude Code - AI-powered knowledge capture and management",

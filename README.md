@@ -135,7 +135,7 @@ cd ~/Documents/Obsidian/YourVault
 claude
 
 # Add plugin marketplace
-/plugin marketplace add ZorroCheng-MC/kf-claude-plugin
+/plugin marketplace add ZorroCheng-MC/kf-claude
 ```
 
 ### Step 2: Install the Plugin
@@ -157,7 +157,7 @@ This opens an interactive menu where you can:
 
 ```bash
 # Install directly by specifying marketplace
-/plugin install kf-claude@ZorroCheng-MC/kf-claude-plugin
+/plugin install kf-claude@ZorroCheng-MC/kf-claude
 ```
 
 ### Step 3: Verify Installation

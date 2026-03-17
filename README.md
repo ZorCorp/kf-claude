@@ -123,9 +123,9 @@ choco install git jq
 
 ## Installation
 
-### Step 1: Add Plugin Marketplace
+### Step 1: Add ZorCorp Marketplace
 
-In your terminal, start Claude Code and add this plugin's marketplace:
+In your terminal, start Claude Code and add the zorskill marketplace:
 
 ```bash
 # Navigate to your Obsidian vault
@@ -134,9 +134,11 @@ cd ~/Documents/Obsidian/YourVault
 # Start Claude Code
 claude
 
-# Add plugin marketplace
-/plugin marketplace add ZorroCheng-MC/kf-claude
+# Add the ZorCorp zorskill marketplace
+/plugin marketplace add ZorCorp/zorskill
 ```
+
+This gives you access to all ZorCorp plugins (kf-claude, kf-cli, flight, and future plugins) from one place.
 
 ### Step 2: Install the Plugin
 
@@ -148,7 +150,7 @@ claude
 ```
 
 This opens an interactive menu where you can:
-- See all available plugins from configured marketplaces
+- See all available plugins from the zorskill marketplace
 - Read plugin descriptions
 - See installation status
 - Install with one selection
@@ -156,8 +158,8 @@ This opens an interactive menu where you can:
 **Option B: Direct Install**
 
 ```bash
-# Install directly by specifying marketplace
-/plugin install kf-claude@ZorroCheng-MC/kf-claude
+# Install kf-claude from the zorskill marketplace
+/plugin install kf-claude
 ```
 
 ### Step 3: Verify Installation

@@ -7,7 +7,7 @@
   "metadata": {
     "description": "KnowledgeFactory for Claude Code - AI-powered knowledge capture and management",
     "version": "1.0.0",
-    "repository": "https://github.com/ZorroCheng-MC/kf-claude",
+    "repository": "https://github.com/ZorCorp/kf-claude",
     "license": "MIT",
     "keywords": [
       "knowledge-management",
